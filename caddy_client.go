@@ -7,12 +7,8 @@ import (
     "strconv"
     "fmt"
     "encoding/json"
-
 )
 
-//type MultiDownloadRequest struct {
-//    URL
-//}
 
 type CaddyClient struct {
     Host        string
@@ -20,17 +16,7 @@ type CaddyClient struct {
     Ssl         bool
     HttpClient  *http.Client
     BaseURI     string
-    WorkingDir  string
-    Parallelism int
 }
-
-//Flow
-//Get Dir listing
-//Create all the Dirs
-//Download all the files in the current dir
-//for each dir, recurse the above
-
-
 
 func (caddy *CaddyClient)  ListDirectoryContents(directory string) ([]FileInfo, error) {
 
@@ -58,16 +44,16 @@ func (caddy *CaddyClient)  ListDirectoryContents(directory string) ([]FileInfo, 
 }
 
 
+func (caddy *CaddyClient) GetFilePart(filePartRequest FilePartRequest ) error {
 
-
-func (caddy *CaddyClient) GetFilePart(filePartRequest FilePartRequest ) (*os.File,  error){
-    filePart, err := os.Create(filePartRequest.DestinationFileName)
-    if (err != nil) {
-        return nil, err
+    var reqPath string
+    if (filePartRequest.CurrentDirectory == "") {
+        reqPath = caddy.BaseURI
+    } else {
+        fmt.Sprintf("%s/%s",caddy.BaseURI, filePartRequest.CurrentDirectory)
     }
-    defer filePart.Close()
 
-    reqURI := fmt.Sprintf("%s/%s",caddy.BaseURI, filePartRequest.CurrentDirectory + filePartRequest.FileInfo.URL[1:len(filePartRequest.FileInfo.URL)])
+    reqURI := fmt.Sprintf("%s%s",reqPath,filePartRequest.FileInfo.URL[1:len(filePartRequest.FileInfo.URL)])
     fmt.Printf("Request URI: %s\n", reqURI)
     req, err := http.NewRequest("GET", reqURI,nil)
 
@@ -75,21 +61,27 @@ func (caddy *CaddyClient) GetFilePart(filePartRequest FilePartRequest ) (*os.Fil
 
     resp, err := caddy.HttpClient.Do(req)
     if (err != nil) {
-        return nil, err
+        return err
     }
     defer resp.Body.Close()
 
     if (resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent) {
         err := fmt.Errorf("Expected OK or  PartialContent, received %v", resp.StatusCode)
-        return nil, err
+        return  err
     }
+
+    filePart, err := os.Create(filePartRequest.DestinationFile)
+    if (err != nil) {
+        return  err
+    }
+    defer filePart.Close()
 
     _, err = io.Copy(filePart, resp.Body)
     if (err != nil) {
-        return nil, err
+        return  err
     }
 
-    return filePart, nil
+    return  nil
 }
 
 func AddRangeHeader (req *http.Request, startRange uint64, endRange uint64)  {

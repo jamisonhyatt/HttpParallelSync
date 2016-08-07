@@ -5,7 +5,7 @@ import (
     "time"
     "fmt"
     "log"
-    "github.com/jamisonhyatt/MultiDownload"
+    "github.com/jamisonhyatt/HttpParallelSync"
 )
 
 
@@ -20,7 +20,7 @@ func main() {
 
     client := NewCaddyClient()
 
-    err := client.Sync("movies")
+    err := HttpParallelSync.Sync(client, "movies", 2)
     if (err != nil){
         log.Fatal(err)
     }
@@ -63,6 +63,5 @@ func NewCaddyClient() *HttpParallelSync.CaddyClient {
         protocol = "http"
     }
     caddy.BaseURI = fmt.Sprintf("%s://%s:%v",protocol, caddy.Host, caddy.Port)
-    caddy.Parallelism = 2//runtime.NumCPU()
     return &caddy
 }
