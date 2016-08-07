@@ -1,0 +1,19 @@
+{
+	"ImportPath": "github.com/jamisonhyatt/HttpParallelSync",
+	"GoVersion": "go1.6",
+	"GodepVersion": "v69",
+	"Deps": [
+		{
+			"ImportPath": "github.com/sdming/gosnow",
+			"Rev": "3a05c415e886bd8d06522975d2c3458eafe93f04"
+		},
+		{
+			"ImportPath": "golang.org/x/net/context",
+			"Rev": "0c607074acd38c5f23d1344dfe74c977464d1257"
+		},
+		{
+			"ImportPath": "golang.org/x/sync/errgroup",
+			"Rev": "316e794f7b5e3df4e95175a45a5fb8b12f85cb4f"
+		}
+	]
+}
