@@ -5,44 +5,31 @@ import (
     "time"
     "fmt"
     "log"
-    "github.com/jamisonhyatt/MultiDownload"
+    "github.com/jamisonhyatt/HttpParallelSync"
+    "gopkg.in/natefinch/lumberjack.v2"
 )
 
 
 
 func main() {
 
-    //v, err := gosnow.Default()
-    //if (err != nil) {
-    //    log.Fatal(err)
-    //}
+    log.SetOutput(&lumberjack.Logger{
+        Filename:   "/var/log/http_parallel_sync/foo.log",
+        MaxSize:    500, // megabytes
+        MaxBackups: 3,
+        MaxAge:     28, //days
+    })
 
 
     client := NewCaddyClient()
 
-    err := client.Sync("movies")
+    err := HttpParallelSync.Sync(client, "movies", 2)
     if (err != nil){
         log.Fatal(err)
     }
 
-    //fileFlake, err := v.Next()
-    //_, err = client.GetFilePart(model.FileInfo{URL:"./Disney-RobinHood.mp4"}, 0, 0, fmt.Sprintf("1_%v", fileFlake))
-    //
-    //split := uint64(2389076156 / 2)
-    //
-    //fileFlake, err = v.Next()
-    //fileName1 := fmt.Sprintf("1_%v", fileFlake)
-    //_, err = client.GetFilePart(model.FileInfo{URL:"./Disney-RobinHood.mp4"}, 0, split, fileName1)
-    //
-    //fileFlake, err = v.Next()
-    //fileName2 := fmt.Sprintf("2_%v", fileFlake)
-    //_, err = client.GetFilePart(model.FileInfo{URL:"./Disney-RobinHood.mp4"}, split + 1, 0, fileName2)
-    //
-    //list := make([]string, 2)
-    //list[0] = fileName1
-    //list[1] = fileName2
-    //
-    //MultiDownload.Combine("RobinHood.mp4", list)
+
+    log.Println("complete")
 }
 
 func NewCaddyClient() *HttpParallelSync.CaddyClient {
@@ -53,7 +40,7 @@ func NewCaddyClient() *HttpParallelSync.CaddyClient {
     }
 
     caddy.HttpClient = &http.Client{
-        Timeout: time.Second * 10,
+        Timeout: time.Second * 25,
 
     }
     var protocol string
@@ -63,6 +50,5 @@ func NewCaddyClient() *HttpParallelSync.CaddyClient {
         protocol = "http"
     }
     caddy.BaseURI = fmt.Sprintf("%s://%s:%v",protocol, caddy.Host, caddy.Port)
-    caddy.Parallelism = 2//runtime.NumCPU()
     return &caddy
 }

@@ -8,18 +8,19 @@ import (
 type FileInfo struct {
     Name    string
     IsDir   bool
-    Size    uint64
+    Size    int64
     URL     string
     ModTime time.Time
     Mode int
 }
 
 type FilePartRequest struct {
-    CurrentDirectory string
+    CurrentURIPath string
     FileInfo FileInfo
     StartByteRange uint64
     EndByteRange uint64
-    DestinationFileName string
+    DestinationFile string
+
 }
 
 type IFileClient interface {
