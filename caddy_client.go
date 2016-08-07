@@ -7,6 +7,7 @@ import (
     "strconv"
     "fmt"
     "encoding/json"
+    "log"
 )
 
 
@@ -44,17 +45,18 @@ func (caddy *CaddyClient)  ListDirectoryContents(directory string) ([]FileInfo, 
 }
 
 
+
 func (caddy *CaddyClient) GetFilePart(filePartRequest FilePartRequest ) error {
 
     var reqPath string
-    if (filePartRequest.CurrentDirectory == "") {
+    if (filePartRequest.CurrentURIPath == "") {
         reqPath = caddy.BaseURI
     } else {
-        fmt.Sprintf("%s/%s",caddy.BaseURI, filePartRequest.CurrentDirectory)
+        reqPath = fmt.Sprintf("%s/%s",caddy.BaseURI, filePartRequest.CurrentURIPath)
     }
 
     reqURI := fmt.Sprintf("%s%s",reqPath,filePartRequest.FileInfo.URL[1:len(filePartRequest.FileInfo.URL)])
-    fmt.Printf("Request URI: %s\n", reqURI)
+    log.Printf("Request URI: %s\n", reqURI)
     req, err := http.NewRequest("GET", reqURI,nil)
 
     AddRangeHeader(req, filePartRequest.StartByteRange, filePartRequest.EndByteRange)

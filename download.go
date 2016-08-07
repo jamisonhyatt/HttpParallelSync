@@ -5,6 +5,9 @@ import (
     "io"
     "log"
     "fmt"
+    "github.com/sdming/gosnow"
+    "strconv"
+    "golang.org/x/sync/errgroup"
 )
 
 //Flow
@@ -16,7 +19,8 @@ import (
 const ParallelismSizeMinimum = 10 * 1024 * 1024 //10MB
 
 func Sync(caddy *CaddyClient, currentDirectory string, parallelism int) error {
-    log.Printf("Starting sync on %s\n", currentDirectory)
+    workDir, _ := os.Getwd()
+    log.Printf("Starting sync on %s into %s/%s\n", currentDirectory, workDir, currentDirectory )
     files, err := caddy.ListDirectoryContents(currentDirectory)
 
     if (err != nil) {
@@ -88,7 +92,9 @@ func DownloadFiles(caddy *CaddyClient, currentDirectory string, files []FileInfo
         //if the file exists, and it's the same size, skip it
         //if the file exists and it's a different size, but our file has a later modified time, skip it.
         //otherwise, delete the existing file and re-download.
-        if existingFileInfo, err := os.Stat(fileRelative); os.IsExist(err) {
+        existingFileInfo, err := os.Stat(fileRelative)
+
+        if (err == nil) {
             if (existingFileInfo.Size() == file.Size) {
                 log.Printf("Skipping - same size: %s", fileRelative)
                 continue;
@@ -103,13 +109,14 @@ func DownloadFiles(caddy *CaddyClient, currentDirectory string, files []FileInfo
                 return err
             }
         }
+        //reset err, as file doesn't exist threw err above
+        err = nil
 
-        var err error
         if (file.Size <= ParallelismSizeMinimum) {
-            err = DownloadFile(caddy, fileRelative, file)
+            err = DownloadFile(fileRelative, caddy,currentDirectory, file)
 
         } else {
-            err = ParallelDownloadFile(caddy, currentDirectory, file, 3)
+            err = ParallelDownloadFile(fileRelative, caddy,currentDirectory, file, 3)
         }
         if (err != nil) {
             return err
@@ -120,8 +127,9 @@ func DownloadFiles(caddy *CaddyClient, currentDirectory string, files []FileInfo
 }
 
 
-func DownloadFile(caddy *CaddyClient, destinationFile string, file FileInfo) error {
+func DownloadFile(destinationFile string, caddy *CaddyClient, currentURIPath string, file FileInfo) error {
     fileRequest := FilePartRequest{
+        CurrentURIPath: currentURIPath,
         FileInfo: file,
         StartByteRange: 0,
         EndByteRange: 0,
@@ -130,26 +138,99 @@ func DownloadFile(caddy *CaddyClient, destinationFile string, file FileInfo) err
     return caddy.GetFilePart(fileRequest )
 }
 
-func ParallelDownloadFile (caddy *CaddyClient, destinationFile string, file FileInfo, parallelism int) error {
+func ParallelDownloadFile (destinationFile string, caddy *CaddyClient, currentURIPath string, file FileInfo, parallelism int) error {
+    v, err := gosnow.Default()
+    if (err != nil) {
+        return err
+    }
 
-    return DownloadFile(caddy, destinationFile, file)
+    chunkSize := uint64(file.Size) / uint64(parallelism)
+    fileRequests := make([]FilePartRequest, parallelism)
+
+    var group errgroup.Group
+
+    chunkStart := uint64(0)
+    chunkThrough := chunkSize
+    for i := 0; i < parallelism; i++ {
+        tempFileNameFlake, err := v.Next()
+        if err != nil {
+            return err
+        }
+
+
+        if (i == len(fileRequests) -1) {
+            chunkThrough = 0
+        }
+        var tempFile string
+        if (currentURIPath == "") {
+            tempFile = strconv.FormatUint(tempFileNameFlake, 10)
+        } else {
+            tempFile = fmt.Sprintf("%s/%s", currentURIPath, strconv.FormatUint(tempFileNameFlake, 10))
+        }
+
+        request := FilePartRequest{
+            CurrentURIPath: currentURIPath,
+            FileInfo: file,
+            StartByteRange: chunkStart,
+            EndByteRange: chunkThrough,
+            DestinationFile: tempFile,
+        }
+        fileRequests[i] = request
+
+        chunkStart += chunkSize + uint64(1)
+        chunkThrough = chunkStart + chunkSize
+
+        group.Go(func() error {
+            return caddy.GetFilePart(request)
+        })
+    }
+
+    //wait for goroutines
+    err = group.Wait()
+    if (err != nil ){
+        DeleteTempFiles(fileRequests)
+        return err
+    }
+
+    err = Combine(destinationFile, fileRequests)
+    if (err != nil) {
+        return err
+    }
+
+    return nil
 }
 
-func Combine(destinationFile string, files []string) error {
+func DeleteTempFiles(requests []FilePartRequest) {
+
+    for _, request := range requests {
+        _, err := os.Stat(request.DestinationFile)
+        if (err != nil) {
+            os.Remove(request.DestinationFile)
+        }
+    }
+}
+
+func Combine(destinationFile string, files []FilePartRequest) error {
     destination, err := os.Create(destinationFile)
     if (err != nil) {
         return err
     }
     defer destination.Close()
 
-    for i := 0; i < len(files); i++ {
-        log.Printf("reading %s", files[i])
-        reader, err := os.Open(files[i])
+    for _, file := range(files) {
+        log.Printf("reading %s", file.DestinationFile)
+        reader, err := os.Open(file.DestinationFile)
         if (err != nil) {
             return err
         }
-        io.Copy(destination, reader)
-        os.Remove(files[i])
+        _, err = io.Copy(destination, reader)
+        if (err != nil) {
+            return err
+        }
+        err  = os.Remove(file.DestinationFile)
+        if (err != nil) {
+            return err
+        }
     }
 
 

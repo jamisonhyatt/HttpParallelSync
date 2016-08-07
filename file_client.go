@@ -15,11 +15,12 @@ type FileInfo struct {
 }
 
 type FilePartRequest struct {
-    CurrentDirectory string
+    CurrentURIPath string
     FileInfo FileInfo
     StartByteRange uint64
     EndByteRange uint64
     DestinationFile string
+
 }
 
 type IFileClient interface {
